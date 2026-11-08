@@ -27,23 +27,47 @@ if (getenv('DB_HOST')) {
   $dbPass = getenv('DB_PASS');
 }
 
-try {
-  $options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-  ];
-  // Karamihan ng cloud MySQL (TiDB, Aiven) ay nangangailangan ng SSL.
-  if (getenv('DB_SSL') === '1') {
-    $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-    $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+// Lazy connection: kumokonekta lang sa database kapag talagang kailangan.
+// Hindi na kailangan ng database ang /health, /categories at /payment-methods,
+// kaya mas mabilis at mas magaan ito sa libreng server.
+class LazyPdo {
+  private $pdo = null;
+  private $dsn; private $user; private $pass; private $options;
+
+  function __construct($dsn, $user, $pass, $options) {
+    $this->dsn = $dsn; $this->user = $user; $this->pass = $pass; $this->options = $options;
   }
-  $pdo = new PDO("mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4", $dbUser, $dbPass, $options);
-} catch (PDOException $e) {
-  error_log('Owllet database connection failed: ' . $e->getMessage());
-  http_response_code(500);
-  echo json_encode(['error' => 'Database connection failed. Check the server configuration.']);
-  exit;
+
+  private function conn() {
+    if ($this->pdo === null) {
+      try {
+        $this->pdo = new PDO($this->dsn, $this->user, $this->pass, $this->options);
+      } catch (PDOException $e) {
+        error_log('Owllet database connection failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Database connection failed. Check the server configuration.']);
+        exit;
+      }
+    }
+    return $this->pdo;
+  }
+
+  function __call($name, $args) {
+    return $this->conn()->$name(...$args);
+  }
 }
+
+$options = [
+  PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+  PDO::ATTR_TIMEOUT => 10,
+];
+// Karamihan ng cloud MySQL (TiDB, Aiven) ay nangangailangan ng SSL.
+if (getenv('DB_SSL') === '1') {
+  $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+  $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+}
+$pdo = new LazyPdo("mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4", $dbUser, $dbPass, $options);
 
 function jsonResponse($data, $code = 200) {
   http_response_code($code);

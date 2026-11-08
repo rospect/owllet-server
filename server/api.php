@@ -1,6 +1,4 @@
 <?php
-// Lahat ng route ng Owllet API. GET at POST lang ang gamit:
-//
 //   GET  /api.php/health             — check kung buhay ang server
 //   GET  /api.php/categories         — mga categories ng gastos
 //   GET  /api.php/payment-methods    — mga way o method ng bayad
@@ -166,7 +164,7 @@ if ($path === '/receipts/delete' && $method === 'POST') {
   jsonResponse(['ok' => true, 'deleted' => $stmt->rowCount()]);
 }
 
-// Dito kinukuha ang photo ng isang gastos: GET /receipts/{expenseId}
+// Dito kinukuha yung photo ng gastos: GET /receipts/{expenseId}
 // Hinihiwalay lang ang path gamit ang slash — hal. ['', 'receipts', 'expense-123']
 $pathParts = explode('/', $path);
 if (count($pathParts) === 3 && $pathParts[1] === 'receipts' && $pathParts[2] !== '' && $method === 'GET') {
@@ -255,5 +253,4 @@ if ($path === '/profile' && $method === 'GET') {
   ]);
 }
 
-// Wala sa itaas ang tumugma — maling URL o maling method.
 jsonResponse(['error' => 'The requested endpoint was not found.'], 404);
